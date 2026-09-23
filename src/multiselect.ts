@@ -29,6 +29,7 @@ export interface MultiSelectItem {
 }
 
 export interface MultiSelectTheme {
+  /** Colour a string. May throw on unknown colour keys. */
   fg(color: string, text: string): string;
 }
 
@@ -99,7 +100,17 @@ export class MultiSelect {
   render(width: number): string[] {
     if (this.cachedLines && this.cachedWidth === width) return this.cachedLines;
 
-    const { fg } = this.theme;
+    // theme.fg is a class method that reads `this.fgColors`, so it must be
+    // called with the theme as receiver. It also throws on unknown color keys,
+    // and a throw inside render() crashes the whole Pi process — so fall back
+    // to the unstyled text on any failure.
+    const fg = (color: string, text: string): string => {
+      try {
+        return this.theme.fg(color, text);
+      } catch {
+        return text;
+      }
+    };
     const lines: string[] = [];
 
     lines.push(truncateToWidth(fg("accent", this.title), width));
