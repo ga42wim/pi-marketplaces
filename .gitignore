@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Logs / debug
+*.log
+npm-debug.log*
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Local test scratch
+/tmp/
+tmp/
