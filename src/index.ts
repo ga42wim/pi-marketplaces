@@ -53,6 +53,15 @@ export default function (pi: ExtensionAPI) {
       return items.length ? items : null;
     },
   });
+
+  // The marketplaces widget is transient output: it should stay on screen while
+  // the user keeps working with /marketplaces, but disappear once they move on.
+  // Extension commands skip this event, so a clear here fires for every *other*
+  // input — i.e. exactly when the user has stopped interacting with the plugin.
+  pi.on("input", async (_event, ctx) => {
+    ctx.ui.setWidget("marketplaces", undefined);
+    return { action: "continue" };
+  });
 }
 
 /* ------------------------------------------------------------------ */

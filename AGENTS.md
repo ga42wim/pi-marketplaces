@@ -74,6 +74,10 @@ These are easy to get wrong; the codebase already had bugs from each of them.
   joining (`src/discover.ts`).
 - User-facing output: use `setWidget` for anything the user should be able to
   read at leisure; `notify` toasts are transient and easy to miss.
+- **Widgets must be cleared.** `setWidget` output persists until overwritten or
+  set to `undefined`. Register an `input`-event handler to clear it once the
+  user moves on (extension commands skip the `input` event, so the clear fires
+  for every *other* input — see `src/index.ts`).
 
 ## Verifying changes
 
