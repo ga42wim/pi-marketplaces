@@ -87,6 +87,20 @@ Load the extension directly — no build needed:
 pi -e ./src/index.ts -p "hi"
 ```
 
+> **Never test against the real `~/.pi/agent`.** It holds the user's live
+> marketplaces and installed skills/agents. Point tests at an isolated config
+> dir instead:
+>
+> ```bash
+> export PI_CODING_AGENT_DIR=/tmp/pi-test-agent
+> pi -e ./src/index.ts
+> ```
+>
+> `PI_CODING_AGENT_DIR` overrides the config dir, so the registry
+> (`marketplaces-state.json`), clones, and install targets all stay inside the
+> sandbox. Wiping a scratch dir is fine; wiping `~/.pi/agent` destroys the
+> user's setup.
+
 Exercise the command flow. In RPC mode you can drive dialogs by responding to
 `extension_ui_request` messages:
 
