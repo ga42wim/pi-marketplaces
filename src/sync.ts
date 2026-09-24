@@ -15,6 +15,7 @@ import {
   SyncResult,
 } from "./types";
 import { discoverPlugins } from "./discover";
+import { uninstallResource } from "./install";
 import { GLOBAL_STATE_FILE } from "./paths";
 import { loadGlobalConfig, saveGlobalConfig } from "./config";
 
@@ -59,7 +60,9 @@ export function addMarketplace(
     if (ref) git(["-C", clonePath, "checkout", ref]);
   }
   entry.clonePath = clonePath;
-  entry.resolvedCommit = resolveCommit(url, ref);
+  // Record what the clone actually contains, not what the remote advertises:
+  // the two can diverge when a fetch/checkout above fails.
+  entry.resolvedCommit = localCommit(clonePath) || resolveCommit(url, ref);
 
   entries.push(entry);
   saveState(entries);
@@ -113,15 +116,25 @@ export function syncMarketplace(
   // Detect cross-marketplace collisions by resource identity
   // (simplified: same resource name from different plugins/marketplaces)
 
-  // Fetch latest
-  const current = entry.resolvedCommit;
-  const latest = resolveCommit(entry.url, entry.ref);
-  if (current === latest && !opts.overwriteLocalChanges) {
-    // No changes
+  // Bring the local clone up to date *before* deciding whether anything
+  // changed. Comparing the remote SHA against `entry.resolvedCommit` is not
+  // enough: that value is whatever the last sync recorded, which can be ahead
+  // of the clone's working tree (e.g. a commit landed after the clone was last
+  // fetched). Trusting it makes sync report "no changes" forever while the
+  // clone stays stale — so always fetch, then diff against the clone's HEAD.
+  const localBefore = localCommit(entry.clonePath);
+  const latest = updateClone(entry) || localBefore;
+
+  if (!latest) {
+    // Clone is missing or unreadable; nothing to reconcile.
+    return result;
+  }
+  if (localBefore === latest && !opts.overwriteLocalChanges) {
+    // Clone already matched upstream.
     return result;
   }
 
-  // Discover plugins from updated clone
+  // Discover plugins from the updated clone
   const marketplace: MarketplaceDescriptor = {
     id: entry.name,
     name: entry.name,
@@ -156,6 +169,38 @@ export function syncMarketplace(
   saveState(entries);
 
   return result;
+}
+
+/** Commit the local clone currently has checked out (empty string on failure). */
+function localCommit(clonePath?: string): string {
+  if (!clonePath) return "";
+  try {
+    return git(["-C", clonePath, "rev-parse", "HEAD"], { encoding: "utf-8" }).trim();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Fetch upstream and hard-reset the clone's working tree to the tracked ref.
+ * Returns the commit the clone now sits on, or null when there is no clone.
+ * Fetch/reset failures are swallowed so a transient network error degrades to
+ * "sync had no effect" instead of aborting the command.
+ */
+function updateClone(entry: MarketplaceRegistryEntry): string | null {
+  const clonePath = entry.clonePath;
+  if (!clonePath || !fs.existsSync(clonePath + "/.git")) return null;
+  try {
+    git(["-C", clonePath, "fetch", "origin"]);
+    if (entry.ref) {
+      git(["-C", clonePath, "checkout", entry.ref]);
+    } else {
+      git(["-C", clonePath, "reset", "--hard", `origin/${defaultBranch(entry.url)}`]);
+    }
+  } catch {
+    // Fall through: report whatever the clone currently has.
+  }
+  return localCommit(clonePath) || null;
 }
 
 function resolveCommit(url: string, ref?: string): string {
